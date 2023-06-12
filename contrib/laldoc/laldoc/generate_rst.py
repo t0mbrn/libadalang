@@ -28,6 +28,7 @@ from os import path as P
 import re
 import sys
 from typing import Dict, List, Optional as Opt, Set, Tuple, Union
+import getDoc
 
 import libadalang as lal
 
@@ -166,7 +167,56 @@ class GenerateDoc(lal.App):
             )
         return "".join(split_doc)
 
-    @memoize
+    documentationPattern = re.compile(r'^\s*---\s?(.*)$')
+    codeBlockPattern = re.compile(r'^\s*---\s+```\s*$')
+
+
+    def is_doc(s):
+        return GenerateDoc.documentationPattern.match(s)
+
+    def is_codeblock_start(s):
+        return GenerateDoc.codeBlockPattern.match(s)
+
+    def find_documentation(decl: lal.BasicDecl):
+        doc = []
+        in_codeblock = False
+        old_line = decl.sloc_range.start.line #TODO maybe end.line?
+        #print(decl.unit.filename)
+        #print(decl.text)
+        Tokens = []
+        for trivia in decl.unit.root.tokens:
+            Tokens.append(trivia)   #TODO effizienter möglich?
+
+        for trivia in reversed(Tokens):
+            if (trivia.is_trivia and trivia.kind == 'Comment' and (trivia.sloc_range.start.line < old_line)):
+                # doctest code blocks are not allowed to be separated by blank lines
+                if abs(trivia.sloc_range.start.line - old_line) < 2:
+                    docText = trivia.text
+                    #print(docText)
+                    codeblockstart = GenerateDoc.is_codeblock_start(docText)
+                    docText = GenerateDoc.is_doc(docText)
+                    if codeblockstart:
+                        if in_codeblock:
+                            continue
+                        doc.append(".. code-block:: ada")
+                        doc.append("    :linenos:")
+                        doc.append("")
+                        old_line = trivia.sloc_range.start.line
+                        in_codeblock = True
+                    elif docText:
+                        doc.insert(3, "    " + docText.group(1))
+                        old_line = trivia.sloc_range.start.line
+                else:
+                    break
+        return doc
+
+    def find_anotation(decl: lal.BasicDecl):
+        annots = {}
+        #annots = {a.key: self.process_annotation(a.key, a.value)
+        #          for a in decl.p_doc_annotations}
+        return annots
+
+    # @memoize
     def get_documentation(
         self, decl: lal.BasicDecl
     ) -> Tuple[List[str], Dict[str, str]]:
@@ -178,15 +228,21 @@ class GenerateDoc(lal.App):
         1. the list of lines that constitutes the documentation for ``decl``;
         2. a mapping (key: string, value: string) for the parsed annotations.
         """
+
         try:
-            doc = self.process_docstring(decl.p_doc).splitlines()
-            annots = {a.key: self.process_annotation(a.key, a.value)
-                      for a in decl.p_doc_annotations}
+            #print(decl.p_doc.splitlines())
+            #doc = list(filter(is_doc,decl.p_doc.splitlines()))
+            #doc = decl.p_doc.splitlines()
+            #print (doc)
+            doc = GenerateDoc.find_documentation(decl)
+            #print(decl.kind_name)
+            #print (getDoc.extract_Doc_From(decl, False))
+            #print(doc)
+            annots = GenerateDoc.find_anotation(decl)
+            return doc, annots
         except lal.PropertyError:
             self.warn('Badly formatted doc for {}'.format(decl.entity_repr))
             return [], {}
-
-        return doc, annots
 
     def main(self) -> None:
         self.lines = []

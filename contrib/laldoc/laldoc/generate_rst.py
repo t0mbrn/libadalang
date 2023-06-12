@@ -28,7 +28,6 @@ from os import path as P
 import re
 import sys
 from typing import Dict, List, Optional as Opt, Set, Tuple, Union
-import getDoc
 
 import libadalang as lal
 

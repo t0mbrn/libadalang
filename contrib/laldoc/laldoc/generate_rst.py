@@ -31,6 +31,9 @@ from typing import Dict, List, Optional as Opt, Set, Tuple, Union
 
 import libadalang as lal
 
+sys.path.append("/home/braune/Dokumente/Secunet/AdaDocTest/adadoctest-working/adadoctest/")
+import lalog
+
 
 PY3 = sys.version_info[0] == 3
 if PY3:
@@ -181,32 +184,38 @@ class GenerateDoc(lal.App):
         in_codeblock = False
         old_line = decl.sloc_range.start.line #TODO maybe end.line?
         #print(decl.unit.filename)
+        #print(decl.kind_name)
         #print(decl.text)
         Tokens = []
         for trivia in decl.unit.root.tokens:
-            Tokens.append(trivia)   #TODO effizienter möglich?
+            Tokens.append(trivia)
 
         for trivia in reversed(Tokens):
-            if (trivia.is_trivia and trivia.kind == 'Comment' and (trivia.sloc_range.start.line < old_line)):
-                # doctest code blocks are not allowed to be separated by blank lines
-                if abs(trivia.sloc_range.start.line - old_line) < 2:
-                    docText = trivia.text
-                    #print(docText)
-                    codeblockstart = GenerateDoc.is_codeblock_start(docText)
-                    docText = GenerateDoc.is_doc(docText)
-                    if codeblockstart:
-                        if in_codeblock:
-                            continue
-                        doc.append(".. code-block:: ada")
-                        doc.append("    :linenos:")
-                        doc.append("")
-                        old_line = trivia.sloc_range.start.line
-                        in_codeblock = True
-                    elif docText:
-                        doc.insert(3, "    " + docText.group(1))
-                        old_line = trivia.sloc_range.start.line
+            if (trivia.sloc_range.start.line < old_line):
+                if (trivia.is_trivia and trivia.kind == 'Comment'):
+                    # doctest code blocks are not allowed to be separated by blank lines
+                    #print(str(abs(trivia.sloc_range.end.line - old_line)) + " " + trivia.text)
+                    if ((abs(trivia.sloc_range.end.line - old_line) < 3)):
+                        docText = trivia.text
+                        codeblockstart = GenerateDoc.is_codeblock_start(docText)
+                        docText = GenerateDoc.is_doc(docText)
+                        if codeblockstart:
+                            if in_codeblock:
+                                continue
+                            doc.append(".. code-block:: ada")
+                            doc.append("    :linenos:")
+                            doc.append("")
+                            old_line = trivia.sloc_range.start.line
+                            in_codeblock = True
+                        elif docText:
+                            doc.insert(3, "    " + docText.group(1))
+                            old_line = trivia.sloc_range.start.line
+                    else:
+                        lalog.log("Incorrect CodeBlock Formatting in %s:%s" % (decl.unit.filename, trivia.sloc_range.end.line), 2)
                 else:
-                    break
+                # breaking when first token above decl is no trivia
+                    if not trivia.is_trivia:
+                        break
         return doc
 
     def find_anotation(decl: lal.BasicDecl):
@@ -291,8 +300,39 @@ class GenerateDoc(lal.App):
 
             self.lines = []
         except AssertionError:
-            print(f"WARNING: Non handled top level decl: {decl}")
-            return
+            #print(f"WARNING: Non handled top level decl: {decl}")
+            try:
+                decl = (
+                    unit.root.cast(lal.CompilationUnit).f_body
+                    .cast(lal.LibraryItem).f_item
+                )
+                if decl.is_a(lal.GenericPackageInstantiation):
+                    #print(decl.p_designated_generic_decl)
+                    """ gen_package_decl = decl.p_designated_generic_decl.cast(lal.GenericPackageDecl)
+                    self.handle_package(gen_package_decl.f_package_decl, gen_package=gen_package_decl)
+
+                    out_file = P.join(self.args.output_dir,
+                                    P.basename(P.splitext(unit.filename)[0]))
+                    with open(f"{out_file}.rst", "w") as f:
+                        f.write("\n".join(line.rstrip() for line in self.lines))
+
+                    self.lines = [] """
+
+                elif decl.is_a(lal.GenericPackageDecl):
+                    gen_package_decl = decl.cast(lal.GenericPackageDecl)
+                    #print(gen_package_decl.f_package_decl)
+                    self.handle_package(gen_package_decl.f_package_decl, gen_package=gen_package_decl)
+
+                    out_file = P.join(self.args.output_dir,
+                                    P.basename(P.splitext(unit.filename)[0]))
+                    with open(f"{out_file}.rst", "w") as f:
+                        f.write("\n".join(line.rstrip() for line in self.lines))
+
+                    self.lines = []
+                else: lalog.log("Unhandled " + decl, 2)
+            except AssertionError:
+                print(f"WARNING: Non handled top level decl: {decl}")
+                return
 
     def handle_package(
         self,

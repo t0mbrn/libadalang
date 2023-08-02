@@ -31,6 +31,7 @@ from typing import Dict, List, Optional as Opt, Set, Tuple, Union
 
 import libadalang as lal
 
+# TODO Relative path
 sys.path.append("/home/braune/Dokumente/Secunet/AdaDocTest/adadoctest-working/adadoctest/")
 import lalog
 
@@ -201,15 +202,22 @@ class GenerateDoc(lal.App):
                         docText = GenerateDoc.is_doc(docText)
                         if codeblockstart:
                             if in_codeblock:
+                                in_codeblock = False
                                 continue
+                            doc.append("")
                             doc.append(".. code-block:: ada")
+                            doc.append("    :caption: DocTest")
                             doc.append("    :linenos:")
                             doc.append("")
                             old_line = trivia.sloc_range.start.line
                             in_codeblock = True
                         elif docText:
-                            doc.insert(3, "    " + docText.group(1))
+                            if in_codeblock:
+                                doc.insert(5, "    " + docText.group(1))
+                            else:
+                                doc.insert(0, docText.group(1))
                             old_line = trivia.sloc_range.start.line
+
                     else:
                         lalog.log("Incorrect CodeBlock Formatting in %s:%s" % (decl.unit.filename, trivia.sloc_range.end.line), 2)
                 else:
@@ -220,8 +228,9 @@ class GenerateDoc(lal.App):
 
     def find_anotation(decl: lal.BasicDecl):
         annots = {}
-        #annots = {a.key: self.process_annotation(a.key, a.value)
-        #          for a in decl.p_doc_annotations}
+        # FIXME?
+        annots = {a.key: self.process_annotation(a.key, a.value)
+                  for a in decl.p_doc_annotations}
         return annots
 
     # @memoize
@@ -238,14 +247,7 @@ class GenerateDoc(lal.App):
         """
 
         try:
-            #print(decl.p_doc.splitlines())
-            #doc = list(filter(is_doc,decl.p_doc.splitlines()))
-            #doc = decl.p_doc.splitlines()
-            #print (doc)
             doc = GenerateDoc.find_documentation(decl)
-            #print(decl.kind_name)
-            #print (getDoc.extract_Doc_From(decl, False))
-            #print(doc)
             annots = GenerateDoc.find_anotation(decl)
             return doc, annots
         except lal.PropertyError:
@@ -535,6 +537,8 @@ class GenerateDoc(lal.App):
             for formal in decl.p_subp_spec_or_null().p_abstract_formal_params:
                 formal_doc, annots = self.get_documentation(formal)
 
+                #FIXME
+                continue
                 # Only generate a param profile if you have doc to show.
                 # TODO: This is weird, because params without doc will not be
                 # shown. Ideally it would be better to switch on if any param

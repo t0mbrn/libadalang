@@ -31,8 +31,7 @@ from typing import Dict, List, Optional as Opt, Set, Tuple, Union
 
 import libadalang as lal
 
-# TODO Relative path
-sys.path.append("/home/braune/Dokumente/Secunet/AdaDocTest/adadoctest-working/adadoctest/")
+sys.path.append(P.join(P.dirname(__file__)+'/../../../../adadoctest'))
 import lalog
 
 
